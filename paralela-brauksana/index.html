@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b1210">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Paralēlā braukšana">
+<meta name="description" content="Paralēlās braukšanas (A–B līniju) palīgs lauksaimniecībai, kas izmanto telefona GPS. Bez atsevišķas GPS iekārtas.">
+<title>Paralēlā braukšana</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="guide">
+    <div id="lightbar" aria-label="LED josla"></div>
+    <div id="xte-row">
+      <span id="arrow-left" class="arrow" aria-hidden="true">◀</span>
+      <span id="xte-value">—</span>
+      <span id="arrow-right" class="arrow" aria-hidden="true">▶</span>
+    </div>
+    <div id="hint" data-i18n="hint_gps_wait">Gaidu GPS signālu…</div>
+  </header>
+
+  <main id="map-wrap">
+    <canvas id="map"></canvas>
+    <div id="badges">
+      <span id="badge-gps" class="badge warn">GPS —</span>
+      <span id="badge-speed" class="badge">0,0 km/h</span>
+      <span id="badge-heading" class="badge">—°</span>
+    </div>
+    <div id="zoom">
+      <button id="zoom-in" type="button" aria-label="Tuvināt">+</button>
+      <button id="zoom-out" type="button" aria-label="Tālināt">−</button>
+    </div>
+    <div id="demo-bar" hidden>
+      <span class="demo-tag">DEMO</span>
+      <button id="demo-left" type="button">◀</button>
+      <label><span data-i18n="demo_speed">Ātrums</span> <input id="demo-speed" type="range" min="0" max="8" step="0.5" value="3"> <span id="demo-speed-val">3</span> m/s</label>
+      <button id="demo-right" type="button">▶</button>
+    </div>
+  </main>
+
+  <footer id="controls">
+    <div id="stats">
+      <span><span data-i18n="stat_line">Josla</span>: <b id="stat-line">—</b></span>
+      <span><span data-i18n="stat_area">Platība</span>: <b id="stat-area">0,00 ha</b></span>
+      <span><span data-i18n="stat_width">Platums</span>: <b id="stat-width">12 m</b></span>
+    </div>
+    <div id="buttons">
+      <button id="btn-a" type="button" class="primary"><span class="big">A</span><span data-i18n="btn_a">A punkts</span></button>
+      <button id="btn-b" type="button" class="primary" disabled><span class="big">B</span><span data-i18n="btn_b">B punkts</span></button>
+      <button id="btn-cov" type="button" class="toggle"><span class="big">▮</span><span id="btn-cov-label" data-i18n="btn_cov">Pārklājums</span></button>
+      <button id="btn-nudge-left" type="button"><span class="big">◀</span><span id="nudge-left-label">10 cm</span></button>
+      <button id="btn-snap" type="button"><span class="big">⌖</span><span data-i18n="btn_snap">Centrēt</span></button>
+      <button id="btn-nudge-right" type="button"><span class="big">▶</span><span id="nudge-right-label">10 cm</span></button>
+      <button id="btn-settings" type="button"><span class="big">⚙</span><span data-i18n="btn_settings">Iestatījumi</span></button>
+    </div>
+  </footer>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="settings">
+    <form method="dialog" id="settings-form">
+      <h2 data-i18n="set_title">Iestatījumi</h2>
+
+      <label class="row">
+        <span data-i18n="set_width">Darba platums (m)</span>
+        <input id="set-width" type="number" min="0.5" max="60" step="0.1" inputmode="decimal">
+      </label>
+
+      <label class="row">
+        <span data-i18n="set_mode">Vadības režīms</span>
+        <select id="set-mode">
+          <option value="ab" data-i18n="mode_ab">A–B līnija (divi punkti)</option>
+          <option value="aplus" data-i18n="mode_aplus">A + virziens</option>
+        </select>
+      </label>
+
+      <div id="aplus-options">
+        <label class="row check">
+          <input id="set-aplus-current" type="checkbox">
+          <span data-i18n="set_aplus_current">Izmantot pašreizējo braukšanas virzienu</span>
+        </label>
+        <label class="row">
+          <span data-i18n="set_aplus_heading">Virziens (°)</span>
+          <input id="set-aplus-heading" type="number" min="0" max="359.9" step="0.1" inputmode="decimal">
+        </label>
+      </div>
+
+      <label class="row">
+        <span data-i18n="set_led_step">LED solis (cm)</span>
+        <select id="set-led-step">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+          <option value="50">50</option>
+        </select>
+      </label>
+
+      <label class="row">
+        <span data-i18n="set_led_mode">LED gaismas rāda</span>
+        <select id="set-led-mode">
+          <option value="steer" data-i18n="led_mode_steer">kurp stūrēt</option>
+          <option value="position" data-i18n="led_mode_pos">kurā pusē ir traktors</option>
+        </select>
+      </label>
+
+      <label class="row">
+        <span data-i18n="set_nudge">Pabīdes solis (cm)</span>
+        <select id="set-nudge">
+          <option value="2">2</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+      </label>
+
+      <label class="row">
+        <span data-i18n="set_map">Kartes orientācija</span>
+        <select id="set-map">
+          <option value="heading" data-i18n="map_heading_up">Kurss uz augšu</option>
+          <option value="north" data-i18n="map_north_up">Ziemeļi uz augšu</option>
+        </select>
+      </label>
+
+      <label class="row check">
+        <input id="set-sound" type="checkbox">
+        <span data-i18n="set_sound">Skaņas signāls, kad novirze ir liela</span>
+      </label>
+      <label class="row check">
+        <input id="set-vibrate" type="checkbox">
+        <span data-i18n="set_vibrate">Vibrācija, kad novirze ir liela</span>
+      </label>
+      <label class="row check">
+        <input id="set-wake" type="checkbox">
+        <span data-i18n="set_wake">Neļaut ekrānam izslēgties</span>
+      </label>
+
+      <label class="row">
+        <span data-i18n="set_lang">Valoda</span>
+        <select id="set-lang">
+          <option value="lv">Latviešu</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+
+      <label class="row check">
+        <input id="set-demo" type="checkbox">
+        <span data-i18n="set_demo">Demo režīms (simulēta braukšana bez GPS)</span>
+      </label>
+
+      <div class="danger-row">
+        <button id="clear-cov" type="button" data-i18n="set_clear_cov">Dzēst pārklājumu</button>
+        <button id="clear-line" type="button" data-i18n="set_clear_line">Dzēst līniju</button>
+        <button id="clear-all" type="button" data-i18n="set_clear_all">Dzēst visu</button>
+      </div>
+
+      <details>
+        <summary data-i18n="help_title">Kā lietot</summary>
+        <ol id="help-list">
+          <li data-i18n="help_1">Nostiprini telefonu traktora kabīnē ar brīvu skatu uz debesīm un atļauj piekļuvi atrašanās vietai.</li>
+          <li data-i18n="help_2">Ievadi agregāta darba platumu.</li>
+          <li data-i18n="help_3">Sāc braukt pa pirmo joslu un nospied A. Brauc taisni līdz joslas beigām un nospied B.</li>
+          <li data-i18n="help_4">Apgriezies un brauc pa nākamo joslu. LED josla un cipars rāda, cik tālu un uz kuru pusi jāstūrē.</li>
+          <li data-i18n="help_5">Ieslēdz pārklājumu, kad agregāts strādā, un izslēdz apgriešanās joslā.</li>
+          <li data-i18n="help_6">Ja GPS „aizpeld”, nostājies uz joslas centra un nospied „Centrēt”, vai pabīdi līniju ar bultiņām.</li>
+        </ol>
+        <p class="note" data-i18n="note_gps">Telefona GPS precizitāte parasti ir 2–5 m un ir labāka, braucot vienmērīgi. Centimetru precizitātei pieslēdz ārēju Bluetooth GNSS (RTK) uztvērēju, kas telefonā darbojas kā atrašanās vietas avots.</p>
+      </details>
+
+      <p class="version">v<span id="version"></span> · <span data-i18n="offline_note">Darbojas bezsaistē, dati paliek tikai šajā ierīcē.</span></p>
+
+      <div class="dialog-actions">
+        <button id="settings-close" type="submit" class="primary" data-i18n="set_close">Aizvērt</button>
+      </div>
+    </form>
+  </dialog>
+
+</div>
+<script src="./guidance.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
